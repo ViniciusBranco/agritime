@@ -33,19 +33,37 @@ def write_parquet(
     partitions: dict[str, str] | None = None,
     filename: str = "part.parquet",
 ) -> Path:
-    """Write a DataFrame as a single Parquet file under the partitioned domain path."""
+    """Write a DataFrame as a single Parquet file under the partitioned domain path.
+
+    Partition keys are encoded in the directory path (Hive-style) and dropped
+    from the DataFrame before writing so a subsequent ``read_parquet`` doesn't
+    see a column-vs-partition type clash.
+    """
     target = parquet_path(domain, partitions=partitions) / filename
-    table = pa.Table.from_pandas(df, preserve_index=False)
+    out = df
+    if partitions:
+        drop = [k for k in partitions if k in df.columns]
+        if drop:
+            out = df.drop(columns=drop)
+    table = pa.Table.from_pandas(out, preserve_index=False)
     pq.write_table(table, target, compression="zstd")
     return target
 
 
 def read_parquet(domain: str) -> pd.DataFrame:
-    """Read every Parquet file under a domain into a single DataFrame."""
+    """Read every Parquet file under a domain into a single DataFrame.
+
+    Partition columns are reconstructed from the directory path. Dictionary-
+    encoded partition columns are cast back to plain strings so callers can
+    treat them as ordinary text.
+    """
     root = DEFAULT_DATA_ROOT / "raw" / "parquet" / domain
     if not root.exists():
         return pd.DataFrame()
-    return pd.read_parquet(root)
+    df = pd.read_parquet(root)
+    for col in df.select_dtypes(include=["category"]).columns:
+        df[col] = df[col].astype(str)
+    return df
 
 
 def get_engine(url: str | None = None) -> Engine:

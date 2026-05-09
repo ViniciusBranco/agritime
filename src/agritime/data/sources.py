@@ -51,33 +51,43 @@ def fetch_nasa_power_hourly(
 ) -> pd.DataFrame:
     """Fetch hourly weather from NASA POWER for a single grid point.
 
-    Returns a long-form DataFrame with one row per hour. Columns include the
-    requested NASA parameter codes plus station_id, source, and a UTC `ts`.
+    The hourly endpoint caps each request at roughly one calendar year, so
+    we chunk by year and concatenate. Returns a long-form DataFrame with one
+    row per hour, columns including the requested NASA parameter codes plus
+    station_id, source, lat, lon, and a UTC `ts`.
     """
-    params = {
-        "parameters": ",".join(parameters),
-        "community": "AG",
-        "longitude": point.lon,
-        "latitude": point.lat,
-        "start": start.strftime("%Y%m%d"),
-        "end": end.strftime("%Y%m%d"),
-        "format": "JSON",
-        "time-standard": "UTC",
-    }
+    frames: list[pd.DataFrame] = []
     with httpx.Client(timeout=timeout) as client:
-        r = client.get(NASA_POWER_HOURLY_URL, params=params)
-        r.raise_for_status()
-        payload = r.json()
+        for year in range(start.year, end.year + 1):
+            chunk_start = max(start, date(year, 1, 1))
+            chunk_end = min(end, date(year, 12, 31))
+            params = {
+                "parameters": ",".join(parameters),
+                "community": "AG",
+                "longitude": point.lon,
+                "latitude": point.lat,
+                "start": chunk_start.strftime("%Y%m%d"),
+                "end": chunk_end.strftime("%Y%m%d"),
+                "format": "JSON",
+                "time-standard": "UTC",
+            }
+            r = client.get(NASA_POWER_HOURLY_URL, params=params)
+            r.raise_for_status()
+            payload = r.json()
+            series = payload["properties"]["parameter"]
+            chunk = pd.DataFrame(series)
+            chunk.index = pd.to_datetime(chunk.index, format="%Y%m%d%H", utc=True)
+            chunk.index.name = "ts"
+            frames.append(chunk.reset_index())
 
-    series = payload["properties"]["parameter"]
-    df = pd.DataFrame(series)
-    df.index = pd.to_datetime(df.index, format="%Y%m%d%H", utc=True)
-    df.index.name = "ts"
+    if not frames:
+        return pd.DataFrame()
+    df = pd.concat(frames, ignore_index=True)
     df["station_id"] = point.station_id
     df["source"] = "nasa_power"
     df["lat"] = point.lat
     df["lon"] = point.lon
-    return df.reset_index()
+    return df.drop_duplicates(subset=["ts"]).sort_values("ts").reset_index(drop=True)
 
 
 def fetch_inmet_annual_zip(year: int, timeout: float = 120.0) -> bytes:

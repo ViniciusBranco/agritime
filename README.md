@@ -2,6 +2,8 @@
 
 A self-contained study lab for **time-series mining and predictive modeling on public agricultural data**, built around a TimescaleDB + Parquet hybrid store, MLflow experiment tracking, and a 7-notebook curriculum that progresses from classical forecasting through deep learning, calibrated uncertainty, and spatio-temporal interpolation.
 
+> **Language convention**: notebook narrative (markdown cells, plot labels, printed messages) is written in **Brazilian Portuguese**. All code identifiers, library names, and the README itself stay in English.
+
 ## Stack
 
 - **Python 3.12**, JupyterLab, FastAPI
