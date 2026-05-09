@@ -1,0 +1,46 @@
+# python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.venv/
+.env
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# notebooks — we commit jupytext .py, not .ipynb
+.ipynb_checkpoints/
+notebooks/*.ipynb
+
+# data
+data/raw/
+data/processed/
+data/cache/
+*.parquet
+*.tif
+*.tiff
+*.zip
+!data/.gitkeep
+
+# mlflow / ml artifacts
+mlflow/
+mlruns/
+*.pkl
+*.pt
+*.ckpt
+lightning_logs/
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# docker
+**/docker-compose.override.yml

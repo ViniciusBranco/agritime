@@ -1,0 +1,67 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: agritime-timescale
+    environment:
+      POSTGRES_USER: agritime
+      POSTGRES_PASSWORD: agritime
+      POSTGRES_DB: agritime
+    ports:
+      - "5433:5432"
+    volumes:
+      - agritime_pgdata:/var/lib/postgresql/data
+      - ./scripts/init_timescale.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agritime -d agritime"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.2
+    container_name: agritime-mlflow
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:////mlflow-store/mlflow.db
+      --artifacts-destination /mlflow-store/artifacts
+    ports:
+      - "5000:5000"
+    volumes:
+      - agritime_mlflow:/mlflow-store
+
+  jupyter:
+    build:
+      context: .
+      dockerfile: docker/jupyter/Dockerfile
+    container_name: agritime-jupyter
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+    environment:
+      AGRITIME_DB_URL: postgresql+psycopg://agritime:agritime@timescaledb:5432/agritime
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      AGRITIME_DATA_ROOT: /workspace/data
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:-agritime}
+    ports:
+      - "8888:8888"
+      - "8000:8000"
+    volumes:
+      - .:/workspace
+      - agritime_data:/workspace/data
+    working_dir: /workspace
+    command: >
+      jupyter lab
+      --ip=0.0.0.0
+      --port=8888
+      --no-browser
+      --ServerApp.root_dir=/workspace
+      --ServerApp.token=${JUPYTER_TOKEN:-agritime}
+
+volumes:
+  agritime_pgdata:
+  agritime_mlflow:
+  agritime_data:
